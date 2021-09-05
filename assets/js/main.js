@@ -12,13 +12,12 @@ const changeImageAnimate = (index) => {
     destroyImage(index)
     const imageItem = document.getElementsByClassName(`image__item${index}`)
     imageList.insertAdjacentHTML("beforeend", `<div class='image__item${index}'></div>`)
-        // imageItem[0].style.backgroundPosition = '0'
     const w = imageItem[0].offsetWidth
     for (let i = 1; i < 5; i++) {
         imageList.insertAdjacentHTML("beforeend", `<div class='image__item${index}'></div>`)
         imageItem[i].style.backgroundPosition = `-${w * i}px 0`
-        imageItem[i].style.left = `${w * i}px`
-        imageItem[i].style.animationDelay = `${i * 0.05}s`
+        imageItem[i].style.left = `${(w - 1) * i}px`
+        imageItem[i].style.animationDelay = `${i * 0.1}s`
     }
     Array.from(imageItem).forEach(el => el.style.zIndex = '2')
 }
@@ -35,7 +34,6 @@ const hiddenImage = (index) => {
     })
 }
 changeImageAnimate(currentIndex)
-    // changeBullet()
 
 const inactivityTime = function() {
     var time;
@@ -93,45 +91,123 @@ Array.from(boxInnerItems).forEach(item => {
 })
 
 // Scroll horizontal next and prew Button
-const scrollHorizontal = function(container, sliderClass, step) {
-    let slider = container.getElementsByClassName(sliderClass)[0]
-    let prewButton = container.querySelector('.prew-button')
-    let nextButton = container.querySelector('.next-button')
-    let start = true;
+function scrollHorizontal($menu, $items, timer = 0) {
+    const $nextButton = $menu.querySelector('.next-button')
+    const $prewButton = $menu.querySelector('.prew-button')
+    let menuWidth = $menu.clientWidth
+    let itemWidth = $items[0].clientWidth
+    let wrapWidth = $items.length * itemWidth
 
-    function nextSlider() {
-        let brand = slider.firstElementChild;
+    let scrollSpeed = 0
+    let oldScrollY = 0
+    let scrollY = 0
+    let y = 0
 
-        if (start) slider.firstElementChild.style.marginLeft = step;
-        else {
-            slider.appendChild(brand);
-            brand.style.marginLeft = '0px';
-            slider.firstElementChild.style.marginLeft = step;
-        }
-        start = false;
+    const lerp = (v0, v1, t) => {
+        return v0 * (1 - t) + v1 * t
     }
 
-    if (nextButton) nextButton.onclick = nextSlider
 
-    function prewSlider() {
-        let lastBrand = slider.lastElementChild;
-        let firstBrand = slider.firstElementChild;
-        if (start) {
-            slider.insertBefore(lastBrand, firstBrand);
-            slider.firstElementChild.style.marginLeft = step
-        }
-        setTimeout(function() { slider.firstElementChild.style.marginLeft = '0px' }, 0)
-        start = true
+    const dispose = (scroll) => {
+        gsap.set($items, {
+            x: (i) => {
+                return i * itemWidth + scroll
+            },
+            modifiers: {
+                x: (x, target) => {
+                    const s = gsap.utils.wrap(-itemWidth, wrapWidth - itemWidth, parseInt(x))
+                    return `${s}px`
+                }
+            }
+        })
+    }
+    dispose(0)
+
+    const handleMouseWheel = (e) => {
+        scrollY -= e.deltaY * 0.9
     }
 
-    if (prewButton) prewButton.onclick = prewSlider
-
-    return {
-        nextSlider: nextSlider,
-        prewSlider: prewSlider
+    let touchStart = 0
+    let touchX = 0
+    let isDragging = false
+    const handleTouchStart = (e) => {
+        touchStart = e.clientX || e.touches[0].clientX
+        isDragging = true
+        $menu.classList.add('is-dragging')
     }
+    const handleTouchMove = (e) => {
+        if (!isDragging) return
+        touchX = e.clientX || e.touches[0].clientX
+        scrollY += (touchX - touchStart) * 2.5
+        touchStart = touchX
+    }
+
+    const handleTouchEnd = () => {
+        isDragging = false
+        scrollY -= scrollY % itemWidth
+        $menu.classList.remove('is-dragging')
+    }
+
+    // $menu.addEventListener('mousewheel', handleMouseWheel)
+
+    $menu.addEventListener('touchstart', handleTouchStart)
+    $menu.addEventListener('touchmove', handleTouchMove)
+    $menu.addEventListener('touchend', handleTouchEnd)
+
+    $menu.addEventListener('mousedown', handleTouchStart)
+    $menu.addEventListener('mousemove', handleTouchMove)
+    $menu.addEventListener('mouseleave', handleTouchEnd)
+    $menu.addEventListener('mouseup', handleTouchEnd)
+
+    $menu.addEventListener('selectstart', () => { return false })
+
+    window.addEventListener('resize', () => {
+        menuWidth = $menu.clientWidth
+        itemWidth = $items[0].clientWidth
+        wrapWidth = $items.length * itemWidth
+    })
+
+    const nextSlider = () => scrollY -= itemWidth
+    if (timer) setInterval(nextSlider, timer)
+
+    if ($nextButton) $nextButton.onclick = nextSlider
+    if ($prewButton) $prewButton.onclick = () => scrollY += itemWidth
+
+    const render = () => {
+        requestAnimationFrame(render)
+        y = lerp(y, scrollY, .1)
+        dispose(y)
+
+        scrollSpeed = y - oldScrollY
+        oldScrollY = y
+
+        gsap.to($items, {
+            skewX: -scrollSpeed * .2,
+            rotate: scrollSpeed * .01,
+            scale: 1 - Math.min(100, Math.abs(scrollSpeed)) * 0.003
+        })
+    }
+    render()
+
 }
-scrollHorizontal($('.products__most-viewed__container'), 'products__most-viewed', '-25%')
-scrollHorizontal($('.products__lastest-posts__container'), 'products__lastest-posts', '-33.33333%')
-const logoScrollHorizontal = scrollHorizontal($('.donor-logo__container'), 'donor-logo', '-16.66667%')
-setInterval(logoScrollHorizontal.nextSlider, 3000)
+
+
+const sliderScrollHorizontal = [{
+        menu: document.querySelector('.products__most-viewed__container'),
+        items: document.querySelectorAll('.products__most-viewed__col'),
+        timer: 0
+    },
+    {
+        menu: document.querySelector('.products__lastest-posts__container'),
+        items: document.querySelectorAll('.products__lastest-posts__item'),
+        timer: 0
+    },
+    {
+        menu: document.querySelector('.donor-logo__container'),
+        items: document.querySelectorAll('.donor-logo__item'),
+        timer: 3000
+    }
+]
+sliderScrollHorizontal.forEach(el => {
+    scrollHorizontal(el.menu, el.items, el.timer)
+})
